@@ -2,6 +2,7 @@ provider "aws" {
   region = "us-east-2"
 }
 
+# Configuration for each instance managed by ASG
 resource "aws_launch_configuration" "example" {
   image_id = "ami-003932de22c285676"
   instance_type = "t2.micro"
@@ -19,12 +20,13 @@ resource "aws_launch_configuration" "example" {
   }
 }
 
+# Configuration for ASG
 resource "aws_autoscaling_group" "example" {
   launch_configuration = aws_launch_configuration.example.name
   vpc_zone_identifier = data.aws_subnets.default.ids
 
   target_group_arns = [aws_lb_target_group.asg.arn]
-  health_check_type = "ELB"
+  health_check_type = "ELB" # defaults to "EC2"
 
   min_size = 2
   max_size = 10
@@ -36,6 +38,7 @@ resource "aws_autoscaling_group" "example" {
   }
 }
 
+# Security group for application instances
 resource "aws_security_group" "instance" {
   name = "learning-terraform-instance"
 
@@ -59,11 +62,6 @@ variable "load_balancer_port" {
   default = 80
 }
 
-# output "public_ip" {
-#   value = aws_instance.example.public_ip
-#   description = "The public IP address of the web server"
-# }
-
 output "alb_dns_name" {
   value = aws_lb.example.dns_name
   description = "The domain name of the load balancer"
@@ -80,6 +78,7 @@ data "aws_subnets" "default" {
   }
 }
 
+# Application Load Balancer
 resource "aws_lb" "example" {
   name = "learning-terraform-lb"
   load_balancer_type = "application"
@@ -87,12 +86,13 @@ resource "aws_lb" "example" {
   security_groups = [aws_security_group.alb.id]
 }
 
+# HTTP Listener for ALB
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.example.arn
   port = var.load_balancer_port
   protocol = "HTTP"
 
-  # By default, return a simple 404 page
+  # By default, return a simple 404 response
   default_action {
     type = "fixed-response"
 
@@ -104,6 +104,7 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+# Security group for ALB
 resource "aws_security_group" "alb" {
   name = "terraform-example-alb"
 
@@ -141,6 +142,7 @@ resource "aws_lb_target_group" "asg" {
   }
 }
 
+# Listener rule that sends requests that match any path to the target group
 resource "aws_lb_listener_rule" "asg" {
   listener_arn = aws_lb_listener.http.arn
   priority = 100
