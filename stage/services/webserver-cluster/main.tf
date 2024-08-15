@@ -11,6 +11,8 @@ resource "aws_launch_configuration" "example" {
   user_data = <<-EOF
               #!/bin/bash
               echo "Hello, World" > index.html
+              echo "${data.terraform_remote_state.db.outputs.address}" >> index.html
+              echo "${data.terraform_remote_state.db.outputs.port}" >> index.html
               nohup busybox httpd -f -p ${var.server_port} &
               EOF
 
@@ -50,23 +52,6 @@ resource "aws_security_group" "instance" {
   }
 }
 
-variable "server_port" {
-  description = "The port the server will use for HTTP requests"
-  type = number
-  default = 8080
-}
-
-variable "load_balancer_port" {
-  description = "The port the load balancer will use for HTTP requests"
-  type = number
-  default = 80
-}
-
-output "alb_dns_name" {
-  value = aws_lb.example.dns_name
-  description = "The domain name of the load balancer"
-}
-
 data "aws_vpc" "default" {
   default = true
 }
@@ -75,6 +60,16 @@ data "aws_subnets" "default" {
   filter {
     name = "vpc-id"
     values = [data.aws_vpc.default.id]
+  }
+}
+
+data "terraform_remote_state" "db" {
+  backend = "s3"
+
+  config = {
+    bucket = "learning-terraform-state-07123"
+    key = "stage/data-stores/mysql/terraform.tfstate"
+    region = "us-east-2"
   }
 }
 
@@ -156,5 +151,17 @@ resource "aws_lb_listener_rule" "asg" {
   action {
     type = "forward"
     target_group_arn = aws_lb_target_group.asg.arn
+  }
+}
+
+terraform {
+  backend "s3" {
+    bucket = "learning-terraform-state-07123"
+    key = "stage/services/webserver-cluster/terraform.tfstate"
+    region = "us-east-2"
+
+    dynamodb_table = "learning-terraform-state-locks"
+    # Encryption At Rest
+    encrypt = true
   }
 }
